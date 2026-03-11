@@ -29,6 +29,7 @@
         .upload-zone {
             border: 2px dashed #c7d2fe; border-radius: 12px; padding: 28px 20px;
             text-align: center; background: #eef2ff; cursor: pointer; transition: all .15s;
+            overflow: hidden; width: 100%; display: block;
         }
         .upload-zone:hover { border-color: #6366f1; background: #e0e7ff; }
         .upload-zone svg { margin: 0 auto 10px; display: block; color: #6366f1; }
@@ -306,10 +307,7 @@
             reader.readAsArrayBuffer(file);
         };
 
-        // Also support click-on-upload-zone
-        document.querySelector('.upload-zone').addEventListener('click', () => {
-            document.getElementById('pdfIn').click();
-        });
+
 
         function render() {
             pdfDoc.getPage(pageNum).then(page => {
@@ -490,7 +488,13 @@
                     }
                 }
                 // Clamp lineMinX to non-negative to prevent control points from pushing text left
+                if (lineMinX === Infinity) { lineMinX = 0; lineMinY = 0; lineMaxY = 100; }
                 lineMinX = Math.max(0, lineMinX);
+
+                const lineMidY = (lineMinY + lineMaxY) / 2;
+                const engine_n = line.length + 2;
+                const engine_v = Math.min(105 / engine_n, 11);
+                const scale_factor = 2.5 / engine_v;
 
                 const translateX = 15 - (lineMinX * scale_factor);
                 const translateY = currentY - (lineMidY * scale_factor);
