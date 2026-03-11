@@ -508,12 +508,36 @@
             finalSvg.appendChild(group);
             sandbox.appendChild(finalSvg);
 
-            // --- FIXED COORDINATE VIEWBOX ---
-            // Instead of parsing bezier control points (which bloats the bounding box),
-            // use a fixed coordinate system based on Calligrapher's known output range.
-            // X: 0 to approximately 20.5 * charsPerLine (internal units)
-            // Y: 0 to currentY (accumulated row heights)
-            const internalW = Math.max(100, 20.5 * charsPerLine + 50);
+            // --- PRECISE VIEWBOX: Scan only actual path endpoints (not control points) ---
+            // Bezier C x1 y1 x2 y2 x y → only (x,y) is the true endpoint; x1,x2 are controls.
+            // Scanning all numbers (old approach) inflated bounding box by ~40%, causing letterboxing.
+            function getPathMaxX(d) {
+                let maxX = 0, curX = 0;
+                // Split on SVG path command letters
+                const tokens = d.trim().split(/(?=[MCLZmclz])/);
+                for (const token of tokens) {
+                    const cmd = token[0];
+                    const nums = token.slice(1).trim().split(/[\s,]+/).filter(Boolean).map(Number);
+                    if (cmd === 'M') { curX = nums[0] || 0; maxX = Math.max(maxX, curX); }
+                    else if (cmd === 'C' && nums.length >= 6) { curX = nums[4]; maxX = Math.max(maxX, curX); }
+                    else if (cmd === 'L' && nums.length >= 2) { curX = nums[0]; maxX = Math.max(maxX, curX); }
+                }
+                return maxX;
+            }
+
+            // For each path in the SVG, compute the actual rightmost visible point
+            let actualMaxX = 50;
+            group.querySelectorAll('path').forEach(p => {
+                const t = p.getAttribute('transform') || '';
+                const scMatch = t.match(/scale\(([\d.]+)\)/);
+                const txMatch = t.match(/translate\(([\d.]+)/);
+                const sc = scMatch ? parseFloat(scMatch[1]) : 1;
+                const tx = txMatch ? parseFloat(txMatch[1]) : 0;
+                const rawMaxX = getPathMaxX(p.getAttribute('d') || '');
+                actualMaxX = Math.max(actualMaxX, rawMaxX * sc + tx);
+            });
+
+            const internalW = Math.max(100, actualMaxX + 40);
             const internalH = Math.max(100, currentY + 50);
 
             finalSvg.setAttribute('viewBox', `0 0 ${internalW} ${internalH}`);
