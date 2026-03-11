@@ -131,7 +131,7 @@
                 </div>
                 <div id="container" class="hidden relative" style="width: fit-content;">
                     <canvas id="pdfCanvas" style="display: block; border-radius: 4px;"></canvas>
-                    <div id="selection" class="absolute bg-blue-500 bg-opacity-20 border-2 border-blue-500 hidden z-10"></div>
+                    <div id="selection" class="absolute bg-blue-500 bg-opacity-20 border-2 border-blue-500 z-10" style="display:none;"></div>
                     <div id="preview-layer" class="absolute top-0 left-0 w-full h-full pointer-events-none z-20"></div>
                 </div>
                 <!-- Page nav -->
@@ -514,17 +514,23 @@
 
             // --- PRECISE VIEWBOX: Scan only actual path endpoints (not control points) ---
             // Bezier C x1 y1 x2 y2 x y → only (x,y) is the true endpoint; x1,x2 are controls.
-            // Scanning all numbers (old approach) inflated bounding box by ~40%, causing letterboxing.
+            // Handles chained-C (multiple beziers without repeating the 'C' letter)
             function getPathMaxX(d) {
-                let maxX = 0, curX = 0;
-                // Split on SVG path command letters
+                let maxX = 0;
                 const tokens = d.trim().split(/(?=[MCLZmclz])/);
                 for (const token of tokens) {
                     const cmd = token[0];
                     const nums = token.slice(1).trim().split(/[\s,]+/).filter(Boolean).map(Number);
-                    if (cmd === 'M') { curX = nums[0] || 0; maxX = Math.max(maxX, curX); }
-                    else if (cmd === 'C' && nums.length >= 6) { curX = nums[4]; maxX = Math.max(maxX, curX); }
-                    else if (cmd === 'L' && nums.length >= 2) { curX = nums[0]; maxX = Math.max(maxX, curX); }
+                    if (cmd === 'M') {
+                        // M x y → anchor; subsequent pairs = implicit LineTo
+                        for (let i = 0; i < nums.length; i += 2) maxX = Math.max(maxX, nums[i] || 0);
+                    } else if (cmd === 'C') {
+                        // Each cubic: x1 y1 x2 y2 x y → endpoint x is at index 4, 10, 16...
+                        for (let i = 4; i < nums.length; i += 6) maxX = Math.max(maxX, nums[i] || 0);
+                    } else if (cmd === 'L') {
+                        // L x y pairs
+                        for (let i = 0; i < nums.length; i += 2) maxX = Math.max(maxX, nums[i] || 0);
+                    }
                 }
                 return maxX;
             }
