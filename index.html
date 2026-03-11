@@ -442,33 +442,23 @@
 
             text = text.replace(/[\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
 
+            // --- NEW RELIABLE LINE WRAPPING ---
+            // Each final rendered character is approx 7.5 pixels wide in the target box.
+            // Dividing tWidth by 7.5 gives the number of chars that should fit per line.
+            const charsPerLine = Math.max(12, Math.min(90, Math.floor(tWidth / 7.5)));
             let currentLines = [];
-            const targetAR = Math.max(tWidth / tHeight, 1.0);
-            let charsPerLine = 15;
-            let bestLines = [text];
             let words = text.split(' ');
-
-            while (charsPerLine <= 85) {
-                let testLines = [];
-                let curL = "";
-                for (let w of words) {
-                    if ((curL + w).length > charsPerLine && curL.length > 0) {
-                        testLines.push(curL.trim());
-                        curL = w + " ";
-                    } else {
-                        curL += w + " ";
-                    }
+            let curL = "";
+            for (let w of words) {
+                if ((curL + w).length > charsPerLine && curL.length > 0) {
+                    currentLines.push(curL.trim());
+                    curL = w + " ";
+                } else {
+                    curL += w + " ";
                 }
-                if (curL.trim()) testLines.push(curL.trim());
-                bestLines = testLines;
-                let numLines = Math.max(testLines.length, 1);
-                let expectedWidth = 20.5 * charsPerLine;
-                let expectedHeight = (120 * numLines) + (5 * charsPerLine) - 100;
-                let projectedAR = expectedWidth / Math.max(expectedHeight, 1);
-                if (projectedAR >= targetAR) break;
-                charsPerLine += 2;
             }
-            currentLines = bestLines;
+            if (curL.trim()) currentLines.push(curL.trim());
+            if (currentLines.length === 0) currentLines = [text];
 
             const svgNS = 'http://www.w3.org/2000/svg';
             const finalSvg = document.createElementNS(svgNS, 'svg');
@@ -499,14 +489,10 @@
                         if (cy > lineMaxY) lineMaxY = cy;
                     }
                 }
-                if (lineMinX === Infinity) { lineMinX = 0; lineMinY = 0; lineMaxY = 100; }
+                // Clamp lineMinX to non-negative to prevent control points from pushing text left
+                lineMinX = Math.max(0, lineMinX);
 
-                const lineMidY = (lineMinY + lineMaxY) / 2;
-                const engine_n = line.length + 2;
-                const engine_v = Math.min(105 / engine_n, 11);
-                const scale_factor = 2.5 / engine_v;
-
-                const translateX = 10 - (lineMinX * scale_factor);
+                const translateX = 15 - (lineMinX * scale_factor);
                 const translateY = currentY - (lineMidY * scale_factor);
 
                 const finalPath = document.createElementNS(svgNS, 'path');
@@ -522,38 +508,17 @@
             finalSvg.appendChild(group);
             sandbox.appendChild(finalSvg);
 
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            const paths = group.querySelectorAll('path');
-            paths.forEach(p => {
-                const transformStr = p.getAttribute('transform');
-                let tX = 0, tY = 0, sc = 1;
-                if (transformStr) {
-                    const tm = transformStr.match(/translate\(([-\d.]+),\s*([-\d.]+)\)/);
-                    if (tm) { tX = parseFloat(tm[1]); tY = parseFloat(tm[2]); }
-                    const sm = transformStr.match(/scale\(([-\d.]+)\)/);
-                    if (sm) { sc = parseFloat(sm[1]); }
-                }
-                const dStr = p.getAttribute('d');
-                if (!dStr) return;
-                const coords = dStr.match(/[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/g);
-                if (!coords) return;
-                for (let i = 0; i < coords.length; i += 2) {
-                    const rawX = parseFloat(coords[i]);
-                    if (i+1 >= coords.length) break;
-                    const rawY = parseFloat(coords[i+1]);
-                    const absX = (rawX * sc) + tX;
-                    const absY = (rawY * sc) + tY;
-                    if (absX < minX) minX = absX;
-                    if (absX > maxX) maxX = absX;
-                    if (absY < minY) minY = absY;
-                    if (absY > maxY) maxY = absY;
-                }
-            });
+            // --- FIXED COORDINATE VIEWBOX ---
+            // Instead of parsing bezier control points (which bloats the bounding box),
+            // use a fixed coordinate system based on Calligrapher's known output range.
+            // X: 0 to approximately 20.5 * charsPerLine (internal units)
+            // Y: 0 to currentY (accumulated row heights)
+            const internalW = Math.max(100, 20.5 * charsPerLine + 50);
+            const internalH = Math.max(100, currentY + 50);
 
-            if (minX === Infinity) { minX = 0; minY = 0; maxX = tWidth; maxY = tHeight; }
-            const bx = minX, by = minY, bw = maxX - minX, bh = maxY - minY;
-            finalSvg.setAttribute('viewBox', `${bx - 15} ${by - 15} ${bw + 30} ${bh + 30}`);
+            finalSvg.setAttribute('viewBox', `0 0 ${internalW} ${internalH}`);
             finalSvg.setAttribute('preserveAspectRatio', 'xMinYMin meet');
+
             finalSvg.setAttribute('width', tWidth + 'px');
             finalSvg.setAttribute('height', tHeight + 'px');
 
