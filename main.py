@@ -1,5 +1,5 @@
 # pyre-ignore-all-errors
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, Request
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 import os, fitz, json, textwrap
 from groq import Groq
@@ -8,6 +8,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from pypdf import PdfReader, PdfWriter
 from typing import Optional
+from datetime import datetime, timedelta
 
 # API SETTINGS
 from dotenv import load_dotenv
@@ -20,6 +21,29 @@ if not GROQ_API_KEY:
 client = Groq(api_key=GROQ_API_KEY)
 app = FastAPI()
 import aiofiles
+
+# --- RATE LIMITING ---
+DAILY_LIMIT = 10  # Max solve requests per IP per 24 hours
+rate_limit_store = {}  # { ip: {"count": N, "reset_at": datetime} }
+
+def check_rate_limit(ip: str) -> bool:
+    """Returns True if the IP is allowed. False if the limit is exceeded."""
+    now = datetime.utcnow()
+    # Clean up expired entries
+    expired = [k for k, v in rate_limit_store.items() if now > v["reset_at"]]
+    for k in expired:
+        del rate_limit_store[k]
+    
+    if ip not in rate_limit_store:
+        rate_limit_store[ip] = {"count": 1, "reset_at": now + timedelta(hours=24)}
+        return True
+    
+    entry = rate_limit_store[ip]
+    if entry["count"] >= DAILY_LIMIT:
+        return False  # Blocked!
+    
+    entry["count"] += 1
+    return True
 
 # Font Loading
 try:
@@ -122,7 +146,14 @@ async def get_model_weights():
 
 
 @app.post("/solve/")
-async def solve_box(file: UploadFile = File(...), box: str = Form(...)):
+async def solve_box(request: Request, file: UploadFile = File(...), box: str = Form(...)):
+    # --- RATE LIMIT CHECK ---
+    client_ip = request.client.host
+    if not check_rate_limit(client_ip):
+        return JSONResponse(
+            status_code=429,
+            content={"error": "Daily limit reached. You can solve up to 10 problems per day. Please come back tomorrow!"}
+        )
     # Get the request from the box
     data = json.loads(box)
     input_path = f"temp_{file.filename}"
