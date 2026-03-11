@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+python-multipart
+aiofiles
+groq
+reportlab
+pypdf
+PyMuPDF
+python-dotenv

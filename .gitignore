@@ -1,0 +1,26 @@
+# Virtual Environments
+venv/
+env/
+.venv/
+
+# Environment Variables (CRITICAL SECURITY)
+.env
+.env.local
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log
+サーバー_*.log
+server*.log
+
+# Temp PDF files
+temp_*.pdf
+fin_*.pdf
+output_*.pdf
+
+# OS generated files
+.DS_Store
