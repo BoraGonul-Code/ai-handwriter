@@ -1,5 +1,10 @@
+/* Container (only shows AFTER PDF loads) */
 #container { position: relative; display: inline-block; cursor: crosshair; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); }
+#container.hidden { display: none !important; }
+
 #selection { position: absolute; border: 2px dashed #2563eb; background: rgba(37,99,235,0.1); display: none; pointer-events: none;}
+
+/* Answer preview boxes stamped over the PDF */
 .preview-box { 
     position: absolute; color: #1e3a8a; font-family: 'Comic Sans MS', cursive, sans-serif; 
     pointer-events: auto; background: rgba(255,255,255,0.85);
@@ -9,10 +14,3 @@
 }
 .preview-box:hover { border-color: #93c5fd; }
 .preview-box.active { border-color: #2563eb; box-shadow: 0 0 10px rgba(37,99,235,0.3); z-index: 40; }
-
-/* Aktif kutu için açılır menü */
-#box-toolbar {
-    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-    background: #1e293b; color: white; padding: 12px 20px; border-radius: 30px;
-    display: none; align-items: center; gap: 12px; z-index: 100; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-}
