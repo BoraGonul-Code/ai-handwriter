@@ -65,6 +65,8 @@
         #box-toolbar button { border: none; border-radius: 6px; padding: 5px 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .1s; }
         .toolbar-solve { background: #4f46e5; color: white; }
         .toolbar-solve:hover { background: #4338ca; }
+        .toolbar-convert { background: #059669; color: white; }
+        .toolbar-convert:hover { background: #047857; }
         .toolbar-delete { background: #ef4444; color: white; }
         .toolbar-delete:hover { background: #dc2626; }
         .toolbar-close { background: transparent; color: #94a3b8; font-size: 16px; padding: 2px 6px; }
@@ -223,6 +225,7 @@
         <span style="color: #94a3b8; font-size: 12px; white-space: nowrap;">Selected Box:</span>
         <input type="text" id="customPrompt" placeholder="Custom instruction (optional)">
         <button id="reSolveBtn" class="toolbar-solve">Solve Again</button>
+        <button id="convertHandBtn" class="toolbar-convert">✍ Write by Hand</button>
         <div style="width: 1px; height: 20px; background: #475569;"></div>
         <button id="deleteBoxBtn" class="toolbar-delete">Delete</button>
         <button id="closeToolbarBtn" class="toolbar-close">✕</button>
@@ -411,20 +414,19 @@
                     return;
                 }
 
-                const rawAns = data.answer;
-                boxObj.answer = "Synthesizing handwriting...";
+                // Step 1: Show the AI text answer for user review
+                boxObj.answer = data.answer;
+                boxObj.pngBase64 = null; // Clear any previous handwriting
                 showPageBoxes();
+                // Open the toolbar so user sees the 'Write by Hand' button
+                activeBoxId = boxObj.id;
+                showToolbar(boxObj);
 
-                const style = parseInt(document.getElementById('myInputStyle').value) || 4;
-                const bias = parseFloat(document.getElementById('myInputBias').value) || 0.75;
-                const base64Png = await queueHandwritingGeneration(rawAns, boxObj.canvasW, boxObj.canvasH, style, bias);
-                boxObj.answer = rawAns;
-                boxObj.pngBase64 = base64Png;
             } catch (err) {
                 console.error("Network Error:", err);
                 boxObj.answer = "Network error – please try again.";
+                showPageBoxes();
             }
-            showPageBoxes();
         }
 
         async function generateFlawlessHandwriting(text, tWidth, tHeight, styleNum, stokeBias) {
@@ -636,6 +638,24 @@
             box.answer = "Solving again...";
             showPageBoxes();
             await fetchSolution(box);
+        };
+
+        document.getElementById('convertHandBtn').onclick = async () => {
+            const box = boxes.find(b => b.id === activeBoxId);
+            if (!box || !box.answer) return;
+            const btn = document.getElementById('convertHandBtn');
+            btn.textContent = '⏳ Writing...';
+            btn.disabled = true;
+            box.pngBase64 = null;
+            box.answer = box.answer; // keep current (possibly user-edited) text
+            showPageBoxes();
+            const style = parseInt(document.getElementById('myInputStyle').value) || 4;
+            const bias = parseFloat(document.getElementById('myInputBias').value) || 0.75;
+            const base64Png = await queueHandwritingGeneration(box.answer, box.canvasW, box.canvasH, style, bias);
+            box.pngBase64 = base64Png;
+            showPageBoxes();
+            btn.textContent = '✍ Write by Hand';
+            btn.disabled = false;
         };
 
         document.getElementById('finish').onclick = async () => {
